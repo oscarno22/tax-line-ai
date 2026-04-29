@@ -74,6 +74,19 @@ Resources:
                 Resource: !Sub arn:aws:lambda:*:${AWS::AccountId}:function:eranova-technical
               - Effect: Allow
                 Action:
+                  - apigateway:POST
+                  - apigateway:PUT
+                  - apigateway:PATCH
+                  - apigateway:GET
+                  - apigateway:DELETE
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource: !Sub arn:aws:lambda:*:${AWS::AccountId}:function:eranova-technical
+              - Effect: Allow
+                Action:
                   - iam:CreateRole
                   - iam:DeleteRole
                   - iam:AttachRolePolicy
