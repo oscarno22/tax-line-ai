@@ -88,6 +88,25 @@ Resources:
                 Resource: !Sub arn:aws:lambda:*:${AWS::AccountId}:function:eranova-technical
               - Effect: Allow
                 Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:DeleteTable
+                  - dynamodb:DescribeTable
+                  - dynamodb:UpdateTable
+                  - dynamodb:TagResource
+                  - dynamodb:UntagResource
+                  - dynamodb:ListTagsOfResource
+                Resource: !Sub arn:aws:dynamodb:*:${AWS::AccountId}:table/eranova-technical
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:DeleteBucket
+                  - s3:PutBucketPublicAccessBlock
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:PutBucketTagging
+                  - s3:GetBucketTagging
+                Resource: !Sub arn:aws:s3:::eranova-technical-${AWS::AccountId}-*
+              - Effect: Allow
+                Action:
                   - iam:CreateRole
                   - iam:DeleteRole
                   - iam:AttachRolePolicy
