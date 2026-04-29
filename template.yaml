@@ -14,6 +14,29 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: eranova-technical-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt DataBucket.Arn
+                  - !Sub ${DataBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt DataTable.Arn
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -54,6 +77,32 @@ Resources:
       StageName: $default
       AutoDeploy: true
 
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub eranova-technical-${AWS::AccountId}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: eranova-technical
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
   LambdaApiPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -69,3 +118,7 @@ Outputs:
     Value: !GetAtt LambdaFunction.Arn
   ApiEndpoint:
     Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/health
+  DataBucketName:
+    Value: !Ref DataBucket
+  DataTableName:
+    Value: !Ref DataTable
