@@ -7,6 +7,8 @@ from openai import OpenAI
 from pydantic import BaseModel
 from typing import Literal
 
+import presign
+
 load_dotenv()
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -26,6 +28,9 @@ def lambda_handler(event, context):
             "statusCode": 200,
             "body": json.dumps({"status": "ok"}),
         }
+
+    if route == "POST /invoice":
+        return presign.handle(event)
 
     if route == "GET /fact":
         try:
