@@ -24,6 +24,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Build Lambda layer
+        run: |
+          pip install \
+            -r layer/requirements.txt \
+            -t layer/python \
+            --upgrade
+
       - name: Package CloudFormation template
         run: |
           aws cloudformation package \

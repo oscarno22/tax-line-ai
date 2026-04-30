@@ -38,6 +38,14 @@ Resources:
                   - dynamodb:Scan
                 Resource: !GetAtt DataTable.Arn
 
+  DependenciesLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: eranova-technical-dependencies
+      CompatibleRuntimes:
+        - python3.12
+      Content: layer/
+
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -48,6 +56,8 @@ Resources:
       Code: src/
       Timeout: 30
       MemorySize: 128
+      Layers:
+        - !Ref DependenciesLayer
 
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
@@ -68,6 +78,13 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       RouteKey: GET /health
+      Target: !Sub integrations/${HttpApiIntegration}
+
+  JokeRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /joke
       Target: !Sub integrations/${HttpApiIntegration}
 
   HttpApiStage:
