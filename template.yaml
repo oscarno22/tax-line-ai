@@ -1,7 +1,18 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Eranova Technical - Lambda Function
 
+Parameters:
+  OpenAIApiKey:
+    Type: String
+    NoEcho: true
+
 Resources:
+  OpenAIApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: eranova/openai-api-key
+      SecretString: !Sub '{"OPENAI_API_KEY":"${OpenAIApiKey}"}'
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -62,7 +73,7 @@ Resources:
       MemorySize: 128
       Environment:
         Variables:
-          OPENAI_API_KEY: '{{resolve:secretsmanager:eranova/openai-api-key:SecretString:OPENAI_API_KEY}}'
+          OPENAI_API_KEY: !Sub '{{resolve:secretsmanager:${OpenAIApiKeySecret}:SecretString:OPENAI_API_KEY}}'
       Layers:
         - !Ref DependenciesLayer
 

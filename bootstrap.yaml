@@ -124,6 +124,15 @@ Resources:
                   - iam:GetRolePolicy
                   - iam:TagRole
                 Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/eranova-*
+              - Effect: Allow
+                Action:
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DeleteSecret
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:TagResource
+                Resource: !Sub arn:aws:secretsmanager:*:${AWS::AccountId}:secret:eranova/*
 
 Outputs:
   ArtifactsBucketName:
