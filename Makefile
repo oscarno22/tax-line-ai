@@ -1,7 +1,13 @@
 AWS_REGION      ?= us-east-1
 BOOTSTRAP_STACK := eranova-bootstrap
 
-.PHONY: layer bootstrap delete-secret
+.PHONY: layer bootstrap format lint
+
+format:
+	uv run ruff format .
+
+lint:
+	uv run ruff check --fix .
 
 layer:
 	uv export --no-dev --no-hashes -o layer/requirements.txt

@@ -30,7 +30,10 @@ def handle(event):
     try:
         meta = table.get_item(Key={"pk": pk, "sk": "METADATA"}).get("Item")
     except Exception:
-        return {"statusCode": 500, "body": json.dumps({"error": "failed to read invoice"})}
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "failed to read invoice"}),
+        }
 
     if not meta:
         return {"statusCode": 404, "body": json.dumps({"error": "invoice not found"})}
@@ -38,18 +41,30 @@ def handle(event):
     status = meta["status"]
 
     if status == "pending":
-        return {"statusCode": 200, "body": json.dumps({"invoice_id": invoice_id, "status": "pending"})}
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"invoice_id": invoice_id, "status": "pending"}),
+        }
 
     if status == "failed":
         return {
             "statusCode": 200,
-            "body": json.dumps({"invoice_id": invoice_id, "status": "failed", "error": meta.get("error", "processing failed")}),
+            "body": json.dumps(
+                {
+                    "invoice_id": invoice_id,
+                    "status": "failed",
+                    "error": meta.get("error", "processing failed"),
+                }
+            ),
         }
 
     try:
         result = table.get_item(Key={"pk": pk, "sk": "RESULT"}).get("Item", {})
     except Exception:
-        return {"statusCode": 500, "body": json.dumps({"error": "failed to read invoice result"})}
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "failed to read invoice result"}),
+        }
 
     body = {
         "invoice_id": invoice_id,
