@@ -27,10 +27,10 @@ def lambda_handler(event, context):
             "body": json.dumps({"status": "ok"}),
         }
 
-    if route == "POST /fact":
+    if route == "GET /fact":
         try:
-            body = json.loads(event.get("body") or "{}")
-            topic = body.get("topic", "science")
+            params = event.get("queryStringParameters") or {}
+            topic = params.get("topic", "science")
 
             completion = client.beta.chat.completions.parse(
                 model="gpt-5",
