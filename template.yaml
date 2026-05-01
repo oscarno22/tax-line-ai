@@ -5,6 +5,9 @@ Parameters:
   OpenAIApiKey:
     Type: String
     NoEcho: true
+  NotificationEmail:
+    Type: String
+    Description: Email address to receive invoice processing notifications
 
 Resources:
   OpenAIApiKeySecret:
@@ -53,6 +56,22 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:eranova/openai-api-key*
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref InvoiceTopic
+
+  InvoiceTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: eranova-technical-invoices
+
+  InvoiceTopicEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref InvoiceTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
 
   DependenciesLayer:
     Type: AWS::Lambda::LayerVersion
@@ -95,6 +114,7 @@ Resources:
           TABLE_NAME: !Ref DataTable
           BUCKET_NAME: !Sub eranova-technical-${AWS::AccountId}-${AWS::Region}
           OPENAI_API_KEY: !Sub '{{resolve:secretsmanager:${OpenAIApiKeySecret}:SecretString:OPENAI_API_KEY}}'
+          SNS_TOPIC_ARN: !Ref InvoiceTopic
       Layers:
         - !Ref DependenciesLayer
 
@@ -199,3 +219,5 @@ Outputs:
     Value: !Ref DataBucket
   DataTableName:
     Value: !Ref DataTable
+  InvoiceTopicArn:
+    Value: !Ref InvoiceTopic

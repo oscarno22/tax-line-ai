@@ -48,7 +48,9 @@ jobs:
             --stack-name eranova-technical \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset \
-            --parameter-overrides OpenAIApiKey=${{ secrets.OPENAI_API_KEY }}
+            --parameter-overrides \
+              OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
+              NotificationEmail=${{ secrets.NOTIFICATION_EMAIL }}
 
       - name: Seed tax categories
         env:
