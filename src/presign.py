@@ -4,12 +4,14 @@ import uuid
 from datetime import datetime, timezone
 
 import boto3
+from botocore.config import Config
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 
 dynamodb = boto3.resource("dynamodb")
-s3_client = boto3.client("s3")
+# sigv4 required — sigv2 presigned urls fail with sts temporary credentials
+s3_client = boto3.client("s3", config=Config(signature_version="s3v4"))
 table = dynamodb.Table(TABLE_NAME)
 
 PRESIGN_EXPIRY = 300
@@ -27,6 +29,13 @@ def handle(event):
             }
 
     vendor = body.get("vendor")
+    content_type = body.get("content_type")
+    if not content_type:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "content_type is required"}),
+        }
+
     invoice_id = f"inv_{uuid.uuid4().hex[:12]}"
     s3_key = f"uploads/{invoice_id}"
     now = datetime.now(timezone.utc).isoformat()
@@ -36,6 +45,7 @@ def handle(event):
         "sk": "METADATA",
         "status": "pending",
         "s3_key": s3_key,
+        "content_type": content_type,
         "created_at": now,
         "updated_at": now,
     }
@@ -54,7 +64,7 @@ def handle(event):
     try:
         upload_url = s3_client.generate_presigned_url(
             "put_object",
-            Params={"Bucket": BUCKET_NAME, "Key": s3_key},
+            Params={"Bucket": BUCKET_NAME, "Key": s3_key, "ContentType": content_type},
             ExpiresIn=PRESIGN_EXPIRY,
         )
     except Exception:
