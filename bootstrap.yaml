@@ -1,4 +1,4 @@
-tAWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: Eranova Technical - Bootstrap (run once to set up deployment infrastructure)
 
 Parameters:
@@ -101,6 +101,7 @@ Resources:
                   - dynamodb:TagResource
                   - dynamodb:UntagResource
                   - dynamodb:ListTagsOfResource
+                  - dynamodb:BatchWriteItem
                 Resource: !Sub arn:aws:dynamodb:*:${AWS::AccountId}:table/eranova-technical
               - Effect: Allow
                 Action:
