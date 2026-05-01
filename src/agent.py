@@ -1,4 +1,5 @@
 import base64
+import io
 import os
 from typing import List
 
@@ -30,9 +31,9 @@ def get_tax_categories() -> List[dict]:
 
 
 def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
-    is_binary = content_type.startswith("image/") or content_type == "application/pdf"
+    file_id = None
 
-    if is_binary:
+    if content_type.startswith("image/"):
         b64 = base64.b64encode(file_bytes).decode()
         user_content = [
             {
@@ -40,20 +41,32 @@ def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
                 "image_url": {"url": f"data:{content_type};base64,{b64}"},
             }
         ]
+    elif content_type == "application/pdf":
+        # image_url doesn't accept pdfs — upload via files api
+        uploaded = client.files.create(
+            file=("invoice.pdf", io.BytesIO(file_bytes), "application/pdf"),
+            purpose="user_data",
+        )
+        file_id = uploaded.id
+        user_content = [{"type": "file", "file": {"file_id": file_id}}]
     else:
         user_content = [
             {"type": "text", "text": file_bytes.decode("utf-8", errors="replace")}
         ]
 
-    response = client.beta.chat.completions.parse(
-        model="gpt-5",
-        messages=[
-            {"role": "system", "content": _EXTRACT_SYSTEM},
-            {"role": "user", "content": user_content},
-        ],
-        response_format=ExtractedInvoice,
-    )
-    return response.choices[0].message.parsed
+    try:
+        response = client.beta.chat.completions.parse(
+            model="gpt-5",
+            messages=[
+                {"role": "system", "content": _EXTRACT_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            response_format=ExtractedInvoice,
+        )
+        return response.choices[0].message.parsed
+    finally:
+        if file_id:
+            client.files.delete(file_id)
 
 
 def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
