@@ -37,8 +37,7 @@ Resources:
                   - s3:DeleteObject
                   - s3:ListBucket
                 Resource:
-                  # use Sub rather than !GetAtt DataBucket.Arn to avoid a circular dependency
-                  # (DataBucket DependsOn LambdaS3Permission -> ProcessLambda -> LambdaExecutionRole)
+                  # use Sub to avoid a circular dependency
                   - !Sub arn:aws:s3:::eranova-technical-${AWS::AccountId}-${AWS::Region}
                   - !Sub arn:aws:s3:::eranova-technical-${AWS::AccountId}-${AWS::Region}/*
               - Effect: Allow

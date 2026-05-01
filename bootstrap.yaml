@@ -71,7 +71,7 @@ Resources:
                   - lambda:GetFunctionConfiguration
                   - lambda:DeleteFunction
                   - lambda:TagResource
-                Resource: !Sub arn:aws:lambda:*:${AWS::AccountId}:function:eranova-technical
+                Resource: !Sub arn:aws:lambda:*:${AWS::AccountId}:function:eranova-technical*
               - Effect: Allow
                 Action:
                   - apigateway:POST
@@ -91,7 +91,7 @@ Resources:
                 Action:
                   - lambda:AddPermission
                   - lambda:RemovePermission
-                Resource: !Sub arn:aws:lambda:*:${AWS::AccountId}:function:eranova-technical
+                Resource: !Sub arn:aws:lambda:*:${AWS::AccountId}:function:eranova-technical*
               - Effect: Allow
                 Action:
                   - dynamodb:CreateTable
@@ -110,6 +110,8 @@ Resources:
                   - s3:GetBucketPublicAccessBlock
                   - s3:PutBucketTagging
                   - s3:GetBucketTagging
+                  - s3:GetBucketNotification
+                  - s3:PutBucketNotification
                 Resource: !Sub arn:aws:s3:::eranova-technical-${AWS::AccountId}-*
               - Effect: Allow
                 Action:
