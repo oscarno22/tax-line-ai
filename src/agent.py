@@ -7,7 +7,7 @@ from agents import Agent, Runner, function_tool
 from openai import OpenAI
 
 import tools as invoice_tools
-from models import ExtractedInvoice
+from models import ClassifiedLineItemInput, ExtractedInvoice
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
@@ -72,7 +72,7 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
 
     @function_tool
     def save_invoice_result(
-        line_items: List[dict],
+        line_items: List[ClassifiedLineItemInput],
         subtotal: float,
         total_tax: float,
         total: float,
@@ -80,7 +80,7 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
         """Save the fully classified invoice result. Call once every line item is classified."""  # noqa: E501
         return invoice_tools.save_invoice_result(
             invoice_id=invoice_id,
-            line_items=line_items,
+            line_items=[item.model_dump() for item in line_items],
             subtotal=subtotal,
             total_tax=total_tax,
             total=total,
