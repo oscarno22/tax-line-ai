@@ -39,6 +39,7 @@ class ClassifiedLineItemInput(LineItem):
 class SaveResult(BaseModel):
     saved: bool
     invoice_id: str
+    status: str
 
 
 # FINAL SHAPE WRITTEN TO DYNAMO

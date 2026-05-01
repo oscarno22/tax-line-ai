@@ -58,11 +58,14 @@ def save_invoice_result(
         }
     )
 
+    has_unclassified = any(item.tax_category == "unclassified" for item in line_items)
+    status = "partial" if has_unclassified else "complete"
+
     table.update_item(
         Key={"pk": pk, "sk": "METADATA"},
         UpdateExpression="SET #s = :s, updated_at = :t",
         ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":s": "complete", ":t": now},
+        ExpressionAttributeValues={":s": status, ":t": now},
     )
 
-    return SaveResult(saved=True, invoice_id=invoice_id)
+    return SaveResult(saved=True, invoice_id=invoice_id, status=status)

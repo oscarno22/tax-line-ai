@@ -68,7 +68,7 @@ def handle(event):
 
     body = {
         "invoice_id": invoice_id,
-        "status": "complete",
+        "status": status,
         "line_items": _floats(result.get("line_items", [])),
         "subtotal": _floats(result.get("subtotal")),
         "total_tax": _floats(result.get("total_tax")),

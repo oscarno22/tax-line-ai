@@ -21,6 +21,7 @@ You are a tax classification agent for RetailCo.
 Call get_tax_categories to see available categories, classify each line item,
 compute tax amounts (tax_amount = subtotal * tax_rate),
 then call save_invoice_result with the complete result.
+If a line item does not clearly fit any available category, use the 'unclassified' category.
 """
 
 
