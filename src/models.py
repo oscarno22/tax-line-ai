@@ -36,6 +36,11 @@ class ClassifiedLineItemInput(LineItem):
     tax_amount: float
 
 
+class SaveResult(BaseModel):
+    saved: bool
+    invoice_id: str
+
+
 # FINAL SHAPE WRITTEN TO DYNAMO
 class InvoiceResult(BaseModel):
     vendor: str | None = None

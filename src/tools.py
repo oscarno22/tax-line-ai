@@ -6,6 +6,8 @@ from typing import List
 import boto3
 from boto3.dynamodb.conditions import Key
 
+from models import ClassifiedLineItemInput, SaveResult, TaxCategory
+
 TABLE_NAME = os.environ["TABLE_NAME"]
 
 dynamodb = boto3.resource("dynamodb")
@@ -22,28 +24,26 @@ def _to_decimal(obj):
     return obj
 
 
-def get_tax_categories() -> List[dict]:
+def get_tax_categories() -> List[TaxCategory]:
     resp = table.query(KeyConditionExpression=Key("pk").eq("TAXCAT"))
-    categories = []
-    for item in resp.get("Items", []):
-        categories.append(
-            {
-                "id": item["sk"].removeprefix("CAT#"),
-                "name": item["name"],
-                "rate": float(item["rate"]),
-                "description": item.get("description"),
-            }
+    return [
+        TaxCategory(
+            id=item["sk"].removeprefix("CAT#"),
+            name=item["name"],
+            rate=item["rate"],
+            description=item.get("description"),
         )
-    return categories
+        for item in resp.get("Items", [])
+    ]
 
 
 def save_invoice_result(
     invoice_id: str,
-    line_items: List[dict],
+    line_items: List[ClassifiedLineItemInput],
     subtotal: float,
     total_tax: float,
     total: float,
-) -> dict:
+) -> SaveResult:
     pk = f"INVOICE#{invoice_id}"
     now = datetime.now(timezone.utc).isoformat()
 
@@ -51,7 +51,7 @@ def save_invoice_result(
         Item={
             "pk": pk,
             "sk": "RESULT",
-            "line_items": _to_decimal(line_items),
+            "line_items": _to_decimal([item.model_dump() for item in line_items]),
             "subtotal": Decimal(str(subtotal)),
             "total_tax": Decimal(str(total_tax)),
             "total": Decimal(str(total)),
@@ -65,4 +65,4 @@ def save_invoice_result(
         ExpressionAttributeValues={":s": "complete", ":t": now},
     )
 
-    return {"saved": True, "invoice_id": invoice_id}
+    return SaveResult(saved=True, invoice_id=invoice_id)
