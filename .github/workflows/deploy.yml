@@ -49,3 +49,8 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset \
             --parameter-overrides OpenAIApiKey=${{ secrets.OPENAI_API_KEY }}
+
+      - name: Seed tax categories
+        env:
+          TABLE_NAME: eranova-technical
+        run: uv run python scripts/seed_categories.py

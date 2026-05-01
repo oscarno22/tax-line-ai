@@ -141,13 +141,6 @@ Resources:
       RouteKey: GET /invoice/{id}
       Target: !Sub integrations/${HttpApiIntegration}
 
-  PostTaxCategoriesRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: POST /tax-categories
-      Target: !Sub integrations/${HttpApiIntegration}
-
   HttpApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
