@@ -79,8 +79,8 @@ def lambda_handler(event, context):
 
         try:
             agent.run_critic(invoice_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"critic failed for {invoice_id}: {exc}")
 
         try:
             meta = repo.get_metadata(invoice_id) or {}

@@ -1,7 +1,7 @@
 AWS_REGION      ?= us-east-1
 BOOTSTRAP_STACK := eranova-bootstrap
 
-.PHONY: layer bootstrap format lint
+.PHONY: layer bootstrap format lint test-invoice test-retailco test-alpha test-scan
 
 format:
 	uv run ruff format .
@@ -22,3 +22,16 @@ bootstrap:
 		--stack-name $(BOOTSTRAP_STACK) \
 		--capabilities CAPABILITY_NAMED_IAM \
 		--region $(AWS_REGION)
+
+FILE ?= sample_invoices/RetailCo_Invoice.pdf
+test-invoice:
+	uv run python scripts/test_invoice.py "$(FILE)"
+
+test-retailco:
+	uv run python scripts/test_invoice.py sample_invoices/RetailCo_Invoice.pdf
+
+test-alpha:
+	uv run python scripts/test_invoice.py sample_invoices/AlphaImportInvoice.pdf
+
+test-scan:
+	uv run python scripts/test_invoice.py sample_invoices/Invoice_Scan.pdf
