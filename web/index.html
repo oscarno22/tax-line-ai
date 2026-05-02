@@ -4,8 +4,254 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Eranova</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 48px auto; padding: 0 24px; color: #111; background: #fff; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 2rem; }
+
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 0.8125rem; font-weight: 500; margin-bottom: 6px; color: #374151; }
+    input[type="text"] { display: block; width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; outline: none; }
+    input[type="text"]:focus { border-color: #111; }
+    input[type="file"] { display: block; font-size: 0.875rem; }
+    button[type="submit"] { margin-top: 8px; padding: 8px 20px; background: #111; color: #fff; border: none; border-radius: 6px; font-size: 0.875rem; cursor: pointer; font-weight: 500; }
+    button[type="submit"]:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    #status { margin-top: 28px; font-size: 0.875rem; color: #6b7280; }
+
+    #result { margin-top: 28px; }
+    .result-outcome { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .result-outcome h2 { font-size: 1rem; font-weight: 600; margin: 0; }
+    .badge { padding: 2px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 500; }
+    .badge-complete { background: #d1fae5; color: #065f46; }
+    .badge-partial  { background: #fef9c3; color: #854d0e; }
+    .badge-failed   { background: #fee2e2; color: #991b1b; }
+
+    .summary { display: flex; gap: 32px; margin-bottom: 20px; padding: 16px; background: #f9fafb; border-radius: 8px; }
+    .summary-item label { font-size: 0.75rem; color: #6b7280; margin-bottom: 2px; }
+    .summary-item .value { font-size: 1rem; font-weight: 600; }
+
+    .partial-note { font-size: 0.8125rem; color: #92400e; background: #fef9c3; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; }
+    .failed-note  { font-size: 0.875rem;  color: #991b1b;  background: #fee2e2; padding: 12px 16px; border-radius: 6px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    thead th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e5e7eb; font-weight: 600; color: #374151; white-space: nowrap; }
+    tbody td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
+    tbody tr.excluded td { color: #9ca3af; }
+    tbody tr.excluded td:first-child { text-decoration: line-through; }
+    .excluded-tag { font-size: 0.7rem; color: #9ca3af; margin-left: 6px; text-decoration: none; display: inline; }
+
+    a.doc-link { display: inline-block; margin-top: 20px; font-size: 0.875rem; color: #111; }
+
+    .hidden { display: none; }
+  </style>
 </head>
 <body>
   <h1>Eranova</h1>
+
+  <form id="uploadForm">
+    <div class="form-group">
+      <label for="vendor">Vendor <span style="color:#9ca3af;font-weight:400">(optional)</span></label>
+      <input type="text" id="vendor" placeholder="e.g. Acme Corp" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label for="file">Invoice file</label>
+      <input type="file" id="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.json,.txt" required>
+    </div>
+    <button type="submit" id="submitBtn">Submit invoice</button>
+  </form>
+
+  <div id="status" class="hidden"></div>
+  <div id="result" class="hidden"></div>
+
+  <script>
+    const API = 'https://s4kdl1j6wj.execute-api.us-east-1.amazonaws.com';
+
+    const CONTENT_TYPES = {
+      '.pdf':  'application/pdf',
+      '.png':  'image/png',
+      '.jpg':  'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.csv':  'text/csv',
+      '.json': 'application/json',
+      '.txt':  'text/plain',
+    };
+
+    const POLL_INTERVAL = 5000;
+    const MAX_POLLS     = 24;
+
+    const form      = document.getElementById('uploadForm');
+    const statusEl  = document.getElementById('status');
+    const resultEl  = document.getElementById('result');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+      statusEl.classList.toggle('hidden', !msg);
+    }
+
+    function getContentType(filename) {
+      const ext = '.' + filename.split('.').pop().toLowerCase();
+      return CONTENT_TYPES[ext] || null;
+    }
+
+    function fmt(n) {
+      return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fmtPct(r) {
+      return (Number(r) * 100).toFixed(0) + '%';
+    }
+
+    function showResult(invoiceId, data) {
+      setStatus('');
+      resultEl.innerHTML = '';
+      resultEl.classList.remove('hidden');
+
+      const { status, line_items, subtotal, total_tax, total, error } = data;
+
+      const badgeClass = { complete: 'badge-complete', partial: 'badge-partial', failed: 'badge-failed' }[status] || '';
+      const badgeLabel = { complete: 'Complete', partial: 'Partial', failed: 'Failed' }[status] || status;
+
+      const header = document.createElement('div');
+      header.className = 'result-outcome';
+      header.innerHTML = `<h2>Invoice ${invoiceId}</h2><span class="badge ${badgeClass}">${badgeLabel}</span>`;
+      resultEl.appendChild(header);
+
+      if (status === 'failed') {
+        const note = document.createElement('div');
+        note.className = 'failed-note';
+        note.textContent = error || 'Processing failed. Please resubmit the invoice.';
+        resultEl.appendChild(note);
+        return;
+      }
+
+      const summary = document.createElement('div');
+      summary.className = 'summary';
+      summary.innerHTML = `
+        <div class="summary-item"><label>Subtotal</label><div class="value">$${fmt(subtotal)}</div></div>
+        <div class="summary-item"><label>Tax</label><div class="value">$${fmt(total_tax)}</div></div>
+        <div class="summary-item"><label>Total</label><div class="value">$${fmt(total)}</div></div>
+      `;
+      resultEl.appendChild(summary);
+
+      if (status === 'partial') {
+        const note = document.createElement('div');
+        note.className = 'partial-note';
+        note.textContent = 'Some line items could not be fully classified and are excluded from the totals. Review the strikethrough rows.';
+        resultEl.appendChild(note);
+      }
+
+      const table = document.createElement('table');
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Subtotal</th>
+            <th>Tax Category</th>
+            <th>Rate</th>
+            <th>Tax Amount</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector('tbody');
+      for (const item of line_items) {
+        const tr = document.createElement('tr');
+        if (item.excluded) tr.classList.add('excluded');
+        tr.innerHTML = `
+          <td>${item.description}${item.excluded ? '<span class="excluded-tag">excluded</span>' : ''}</td>
+          <td>${item.quantity  ?? '—'}</td>
+          <td>${item.unit_price != null ? '$' + fmt(item.unit_price) : '—'}</td>
+          <td>${item.subtotal  != null ? '$' + fmt(item.subtotal)   : '—'}</td>
+          <td>${item.tax_category}</td>
+          <td>${fmtPct(item.tax_rate)}</td>
+          <td>${item.excluded ? '—' : '$' + fmt(item.tax_amount)}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+      resultEl.appendChild(table);
+
+      const link = document.createElement('a');
+      link.href      = `${API}/invoice/${invoiceId}/file`;
+      link.target    = '_blank';
+      link.className = 'doc-link';
+      link.textContent = 'View original document →';
+      resultEl.appendChild(link);
+    }
+
+    function poll(invoiceId) {
+      return new Promise((resolve, reject) => {
+        let count = 0;
+        const timer = setInterval(async () => {
+          count++;
+          setStatus(`Processing... ${count * (POLL_INTERVAL / 1000)}s`);
+          try {
+            const resp = await fetch(`${API}/invoice/${invoiceId}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (data.status !== 'pending') {
+              clearInterval(timer);
+              resolve(data);
+            } else if (count >= MAX_POLLS) {
+              clearInterval(timer);
+              reject(new Error('Timed out waiting for result.'));
+            }
+          } catch (err) {
+            clearInterval(timer);
+            reject(err);
+          }
+        }, POLL_INTERVAL);
+      });
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file   = document.getElementById('file').files[0];
+      const vendor = document.getElementById('vendor').value.trim();
+      if (!file) return;
+
+      const contentType = getContentType(file.name);
+      if (!contentType) {
+        alert('Unsupported file type.');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      resultEl.classList.add('hidden');
+
+      let invoiceId;
+      try {
+        setStatus('Creating invoice...');
+        const postResp = await fetch(`${API}/invoice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content_type: contentType, ...(vendor && { vendor }) }),
+        });
+        if (!postResp.ok) throw new Error(`Failed to create invoice (${postResp.status}).`);
+        const postData = await postResp.json();
+        invoiceId = postData.invoice_id;
+
+        setStatus('Uploading file...');
+        const putResp = await fetch(postData.upload_url, {
+          method: 'PUT',
+          headers: { 'Content-Type': contentType },
+          body: file,
+        });
+        if (!putResp.ok) throw new Error(`File upload failed (${putResp.status}).`);
+
+        const result = await poll(invoiceId);
+        showResult(invoiceId, result);
+      } catch (err) {
+        setStatus('');
+        resultEl.innerHTML = `<div class="failed-note">${err.message}</div>`;
+        resultEl.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>

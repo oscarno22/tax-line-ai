@@ -132,6 +132,14 @@ Resources:
     Properties:
       Name: eranova-technical
       ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+        AllowHeaders:
+          - content-type
 
   HttpApiIntegration:
     Type: AWS::ApiGatewayV2::Integration
@@ -186,6 +194,15 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - content-type
+            AllowedMethods:
+              - PUT
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3600
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: s3:ObjectCreated:*
