@@ -21,7 +21,10 @@ def handle(event):
     try:
         meta = repo.get_metadata(invoice_id)
     except Exception:
-        return {"statusCode": 500, "body": json.dumps({"error": "failed to read invoice"})}
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "failed to read invoice"}),
+        }
 
     if not meta:
         return {"statusCode": 404, "body": json.dumps({"error": "invoice not found"})}
@@ -37,7 +40,10 @@ def handle(event):
             ExpiresIn=FILE_PRESIGN_EXPIRY,
         )
     except Exception:
-        return {"statusCode": 500, "body": json.dumps({"error": "failed to generate file url"})}
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "failed to generate file url"}),
+        }
 
     return {
         "statusCode": 302,
