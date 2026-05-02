@@ -1,9 +1,13 @@
+import logging
 import os
 
 import boto3
 
 import agent
 from repository import repo
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 API_BASE_URL = os.environ.get("API_BASE_URL")
@@ -41,11 +45,13 @@ def _notify(
 
     try:
         sns_client.publish(TopicArn=SNS_TOPIC_ARN, Subject=subject, Message=body)
-    except Exception:
-        pass
+        logger.info("invoice_id=%s notification sent status=%s", invoice_id, status)
+    except Exception as exc:
+        logger.warning("invoice_id=%s notification failed: %s", invoice_id, exc)
 
 
 def _fail(invoice_id: str, error: str) -> None:
+    logger.error("invoice_id=%s failed: %s", invoice_id, error)
     repo.set_failed(invoice_id, error)
     _notify(invoice_id, "failed", error=error)
 
@@ -60,12 +66,20 @@ def lambda_handler(event, context):
             raise ValueError(f"unexpected S3 key format: {key!r}")
         invoice_id = parts[1]
 
+        logger.info("invoice_id=%s processing started key=%s", invoice_id, key)
+
         try:
             resp = s3_client.get_object(Bucket=bucket, Key=key)
             file_bytes = resp["Body"].read()
             meta = repo.get_metadata(invoice_id) or {}
             content_type = meta.get("content_type") or resp.get(
                 "ContentType", "application/octet-stream"
+            )
+            logger.info(
+                "invoice_id=%s file loaded content_type=%s size=%d bytes",
+                invoice_id,
+                content_type,
+                len(file_bytes),
             )
         except Exception as exc:
             _fail(invoice_id, f"failed to read uploaded file: {exc}")
@@ -80,7 +94,7 @@ def lambda_handler(event, context):
         try:
             agent.run_critic(invoice_id)
         except Exception as exc:
-            print(f"critic failed for {invoice_id}: {exc}")
+            logger.warning("invoice_id=%s critic failed: %s", invoice_id, exc)
 
         try:
             meta = repo.get_metadata(invoice_id) or {}
@@ -91,5 +105,5 @@ def lambda_handler(event, context):
                 vendor=meta.get("vendor"),
                 result=result,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("invoice_id=%s post-processing failed: %s", invoice_id, exc)

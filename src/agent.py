@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import logging
 import os
 from typing import List
 
@@ -17,6 +18,7 @@ from models import (
 )
 from repository import repo, to_float
 
+logger = logging.getLogger(__name__)
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 _EXTRACT_SYSTEM = """
@@ -89,14 +91,29 @@ def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
             input=[{"role": "user", "content": user_content}],
             text_format=ExtractedInvoice,
         )
-        return response.output_parsed
+        result = response.output_parsed
+        logger.info(
+            "extraction complete vendor=%s items=%d",
+            result.vendor,
+            len(result.line_items),
+        )
+        return result
     finally:
         if file_id:
             client.files.delete(file_id)
 
 
 def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
+    logger.info(
+        "invoice_id=%s extraction starting content_type=%s", invoice_id, content_type
+    )
     extracted = _extract(file_bytes, content_type)
+
+    logger.info(
+        "invoice_id=%s classifier starting items=%d",
+        invoice_id,
+        len(extracted.line_items),
+    )
 
     @function_tool
     def save_invoice_result(line_items: List[ClassifiedLineItemInput]) -> SaveResult:
@@ -117,12 +134,17 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
         agent,
         f"Invoice ID: {invoice_id}\n\nExtracted line items:\n{extracted.model_dump_json(indent=2)}",  # noqa: E501
     )
+    logger.info("invoice_id=%s classifier complete", invoice_id)
 
 
 def run_critic(invoice_id: str) -> None:
     result = repo.get_result(invoice_id)
     if not result or not result.get("line_items"):
         return
+
+    logger.info(
+        "invoice_id=%s critic starting items=%d", invoice_id, len(result["line_items"])
+    )
 
     @function_tool
     def correct_invoice_result(corrections: List[CorrectionInput]) -> CorrectionResult:
@@ -141,3 +163,4 @@ def run_critic(invoice_id: str) -> None:
         critic,
         f"Invoice ID: {invoice_id}\n\nClassified line items:\n{line_items_json}",
     )
+    logger.info("invoice_id=%s critic complete", invoice_id)
