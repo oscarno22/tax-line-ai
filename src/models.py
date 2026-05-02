@@ -43,6 +43,17 @@ class SaveResult(BaseModel):
     status: str
 
 
+class CorrectionInput(BaseModel):
+    line_item_index: int
+    tax_category: str
+    note: str | None = None
+
+
+class CorrectionResult(BaseModel):
+    corrected: int
+    status: str
+
+
 # FINAL SHAPE WRITTEN TO DYNAMO
 class InvoiceResult(BaseModel):
     vendor: str | None = None

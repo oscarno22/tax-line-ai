@@ -1,13 +1,21 @@
 import base64
 import io
+import json
 import os
 from typing import List
 
 from agents import Agent, Runner, function_tool
 from openai import OpenAI
 
-from models import ClassifiedLineItemInput, ExtractedInvoice, SaveResult, TaxCategory
-from repository import repo
+from models import (
+    ClassifiedLineItemInput,
+    CorrectionInput,
+    CorrectionResult,
+    ExtractedInvoice,
+    SaveResult,
+    TaxCategory,
+)
+from repository import repo, to_float
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
@@ -23,6 +31,24 @@ compute tax amounts (tax_amount = subtotal * tax_rate),
 then call save_invoice_result with all line items.
 If a line item does not clearly fit any available category, use the 'unclassified' category.
 If a line item's quantity, unit_price, or subtotal could not be read, set those fields to null.
+"""  # noqa: E501
+
+_CRITIC_SYSTEM = """
+You are a tax classification critic for RetailCo.
+Review the classifier agent's output and correct clear errors before the result is finalised.
+
+Steps:
+1. Call get_tax_categories to fetch all valid categories and their rates.
+2. Review each line item (0-indexed) for:
+   - Category plausibility: does the description match the assigned category?
+     Example of a clear error: dog food classified as electronics.
+   - Rate sanity: verify tax_rate matches the rate for the assigned category.
+   - Excluded item recovery: if tax_category is 'unclassified', attempt to assign the best matching category.
+   - Numeric consistency: does quantity x unit_price ≈ subtotal? Note issues but do not correct numeric fields.
+3. If corrections are needed, call correct_invoice_result once with all corrections.
+   If everything looks correct, do not call correct_invoice_result.
+
+Only correct obvious errors. Do not second-guess borderline or plausible classifications.
 """  # noqa: E501
 
 
@@ -90,4 +116,28 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
     Runner.run_sync(
         agent,
         f"Invoice ID: {invoice_id}\n\nExtracted line items:\n{extracted.model_dump_json(indent=2)}",  # noqa: E501
+    )
+
+
+def run_critic(invoice_id: str) -> None:
+    result = repo.get_result(invoice_id)
+    if not result or not result.get("line_items"):
+        return
+
+    @function_tool
+    def correct_invoice_result(corrections: List[CorrectionInput]) -> CorrectionResult:
+        """Correct misclassified line items. Recomputes totals server-side. Call at most once."""  # noqa: E501
+        return repo.apply_corrections(invoice_id, corrections)
+
+    critic = Agent(
+        name="tax-critic",
+        model="gpt-5",
+        instructions=_CRITIC_SYSTEM,
+        tools=[get_tax_categories, correct_invoice_result],
+    )
+
+    line_items_json = json.dumps(to_float(result.get("line_items", [])), indent=2)
+    Runner.run_sync(
+        critic,
+        f"Invoice ID: {invoice_id}\n\nClassified line items:\n{line_items_json}",
     )

@@ -78,6 +78,11 @@ def lambda_handler(event, context):
             continue
 
         try:
+            agent.run_critic(invoice_id)
+        except Exception:
+            pass
+
+        try:
             meta = repo.get_metadata(invoice_id) or {}
             result = repo.get_result(invoice_id)
             _notify(

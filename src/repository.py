@@ -6,7 +6,13 @@ from typing import List
 import boto3
 from boto3.dynamodb.conditions import Key
 
-from models import ClassifiedLineItemInput, SaveResult, TaxCategory
+from models import (
+    ClassifiedLineItemInput,
+    CorrectionInput,
+    CorrectionResult,
+    SaveResult,
+    TaxCategory,
+)
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 
@@ -143,6 +149,92 @@ class InvoiceRepository:
         )
 
         return SaveResult(saved=True, invoice_id=invoice_id, status=status)
+
+    def apply_corrections(
+        self,
+        invoice_id: str,
+        corrections: List[CorrectionInput],
+    ) -> CorrectionResult:
+        if not corrections:
+            meta = self.get_metadata(invoice_id) or {}
+            return CorrectionResult(corrected=0, status=meta.get("status", "complete"))
+
+        pk = self._pk(invoice_id)
+        now = datetime.now(timezone.utc).isoformat()
+
+        result_item = self._table.get_item(Key={"pk": pk, "sk": "RESULT"}).get(
+            "Item", {}
+        )
+        line_items = list(result_item.get("line_items", []))
+        categories = {cat.id: cat for cat in self.get_tax_categories()}
+
+        correction_records = []
+        corrected_count = 0
+        for c in corrections:
+            idx = c.line_item_index
+            if not (0 <= idx < len(line_items)):
+                continue
+            cat = categories.get(c.tax_category)
+            if not cat:
+                continue
+            rate = float(cat.rate)
+            subtotal = float(line_items[idx].get("subtotal") or 0)
+            correction_records.append(
+                {
+                    "line_item_index": idx,
+                    "original_category": line_items[idx].get(
+                        "tax_category", "unclassified"
+                    ),
+                    "corrected_category": c.tax_category,
+                    "note": c.note,
+                }
+            )
+            line_items[idx] = {
+                **line_items[idx],
+                "tax_category": c.tax_category,
+                "tax_rate": Decimal(str(rate)),
+                "tax_amount": Decimal(str(subtotal * rate)),
+                "excluded": False,
+            }
+            corrected_count += 1
+
+        if not corrected_count:
+            meta = self.get_metadata(invoice_id) or {}
+            return CorrectionResult(corrected=0, status=meta.get("status", "complete"))
+
+        self._table.put_item(
+            Item={
+                "pk": pk,
+                "sk": "CORRECTIONS",
+                "corrections": _to_decimal(correction_records),
+                "corrected_at": now,
+            }
+        )
+
+        valid = [item for item in line_items if not item.get("excluded", False)]
+        subtotal = sum(float(item.get("subtotal") or 0) for item in valid)
+        total_tax = sum(float(item.get("tax_amount") or 0) for item in valid)
+
+        self._table.put_item(
+            Item={
+                "pk": pk,
+                "sk": "RESULT",
+                "line_items": line_items,
+                "subtotal": Decimal(str(subtotal)),
+                "total_tax": Decimal(str(total_tax)),
+                "total": Decimal(str(subtotal + total_tax)),
+            }
+        )
+
+        status = "complete" if len(valid) == len(line_items) else "partial"
+        self._table.update_item(
+            Key={"pk": pk, "sk": "METADATA"},
+            UpdateExpression="SET #s = :s, updated_at = :t",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={":s": status, ":t": now},
+        )
+
+        return CorrectionResult(corrected=corrected_count, status=status)
 
 
 repo = InvoiceRepository(dynamodb.Table(TABLE_NAME))
