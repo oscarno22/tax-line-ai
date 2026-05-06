@@ -1,8 +1,11 @@
 import json
+import logging
 
 import file
 import presign
 import query
+
+logging.getLogger().setLevel(logging.INFO)
 
 
 def lambda_handler(event, context):

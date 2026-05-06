@@ -6,7 +6,7 @@ import boto3
 import agent
 from repository import repo
 
-logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
