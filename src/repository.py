@@ -68,7 +68,6 @@ class InvoiceRepository:
                 id=item["sk"].removeprefix("CAT#"),
                 name=item["name"],
                 rate=item["rate"],
-                description=item.get("description"),
             )
             for item in resp.get("Items", [])
         ]

@@ -27,6 +27,7 @@ CONTENT_TYPES = {
 def main() -> None:
     default_file = os.environ.get("TEST_INVOICE_PATH")
 
+    # allows for easily testing of different files/vendors
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "file",

@@ -23,7 +23,6 @@ class TaxCategory(BaseModel):
     id: str
     name: str
     rate: Decimal
-    description: str | None = None
 
 
 # agent input shape for classified line items

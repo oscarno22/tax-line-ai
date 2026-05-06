@@ -12,9 +12,12 @@ CSV_PATH = Path(__file__).parent.parent / "data" / "tax_rate_by_category.csv"
 
 
 def _slugify(name: str) -> str:
+    # decompose accented characters so e.g. "café" → "cafe"
     name = unicodedata.normalize("NFD", name)
+    # strip combining marks (the separated accent characters)
     name = "".join(c for c in name if unicodedata.category(c) != "Mn")
     name = name.lower()
+    # replace non-alphanumeric sequences with underscores
     name = re.sub(r"[^a-z0-9]+", "_", name)
     return name.strip("_")
 
@@ -28,6 +31,7 @@ def main() -> None:
     with table.batch_writer() as batch:
         for row in rows:
             name = row["Category"].strip()
+            # csv stores rate as a percentage — convert to float then Decimal
             rate_pct = float(row["Tax Rate (%)"].strip())
             batch.put_item(
                 Item={
