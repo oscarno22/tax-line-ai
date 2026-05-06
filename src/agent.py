@@ -22,8 +22,11 @@ logger = logging.getLogger(__name__)
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 _EXTRACT_SYSTEM = """
-Extract all line items from this invoice.
-Return the vendor name and every line item with description, quantity, unit price, and subtotal.
+Determine whether this document is an invoice or purchase order containing line items.
+Set is_invoice to true only if the document clearly contains purchasable line items with prices.
+Set is_invoice to false for anything else (photos, contracts, receipts without line items, random text, etc).
+If is_invoice is true, extract the vendor name and every line item with description, quantity, unit price, and subtotal.
+If is_invoice is false, return empty line_items.
 """  # noqa: E501
 
 _CLASSIFY_SYSTEM = """
@@ -112,6 +115,9 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
         "invoice_id=%s extraction starting content_type=%s", invoice_id, content_type
     )
     extracted = _extract(file_bytes, content_type)
+
+    if not extracted.is_invoice:
+        raise ValueError("uploaded file does not appear to be an invoice")
 
     logger.info(
         "invoice_id=%s classifier starting items=%d",

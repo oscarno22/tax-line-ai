@@ -14,6 +14,7 @@ class LineItem(BaseModel):
 
 # extracted invoice items + vendor name
 class ExtractedInvoice(BaseModel):
+    is_invoice: bool
     vendor: str | None = None
     line_items: List[LineItem]
 
