@@ -46,7 +46,7 @@ Steps:
      Example of a clear error: dog food classified as electronics.
    - Rate sanity: verify tax_rate matches the rate for the assigned category.
    - Excluded item recovery: if tax_category is 'unclassified', attempt to assign the best matching category.
-   - Numeric consistency: does quantity x unit_price ≈ subtotal? Note issues but do not correct numeric fields.
+   - Numeric consistency: does quantity x unit_price ≈ subtotal? Note issues but but do not correct numeric fields.
 3. If corrections are needed, call correct_invoice_result once with all corrections.
    If everything looks correct, do not call correct_invoice_result.
 
@@ -64,6 +64,7 @@ def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
     file_id = None
 
     if content_type.startswith("image/"):
+        # encode image as base64 data url for vision input
         b64 = base64.b64encode(file_bytes).decode()
         user_content = [
             {
@@ -72,7 +73,7 @@ def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
             }
         ]
     elif content_type == "application/pdf":
-        # responses api handles pdfs natively via file_id
+        # responses api handles pdfs directly
         uploaded = client.files.create(
             file=("invoice.pdf", io.BytesIO(file_bytes), "application/pdf"),
             purpose="user_data",
@@ -80,11 +81,13 @@ def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
         file_id = uploaded.id
         user_content = [{"type": "input_file", "file_id": file_id}]
     else:
+        # csv / json — decode as plain text
         user_content = [
             {"type": "input_text", "text": file_bytes.decode("utf-8", errors="replace")}
         ]
 
     try:
+        # extract line items, costs, and/or vendor from file
         response = client.responses.parse(
             model="gpt-5",
             instructions=_EXTRACT_SYSTEM,
@@ -99,6 +102,7 @@ def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
         )
         return result
     finally:
+        # always delete uploaded file — openai charges for storage
         if file_id:
             client.files.delete(file_id)
 
@@ -115,6 +119,7 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
         len(extracted.line_items),
     )
 
+    # avoids passing invoice_id to the agent
     @function_tool
     def save_invoice_result(line_items: List[ClassifiedLineItemInput]) -> SaveResult:
         """Save the fully classified invoice result. Call once every line item is classified."""  # noqa: E501
@@ -130,6 +135,7 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
         tools=[get_tax_categories, save_invoice_result],
     )
 
+    # run agent until all line items are classified
     Runner.run_sync(
         agent,
         f"Invoice ID: {invoice_id}\n\nExtracted line items:\n{extracted.model_dump_json(indent=2)}",  # noqa: E501
@@ -146,6 +152,7 @@ def run_critic(invoice_id: str) -> None:
         "invoice_id=%s critic starting items=%d", invoice_id, len(result["line_items"])
     )
 
+    # closure captures invoice_id — same pattern as save_invoice_result above
     @function_tool
     def correct_invoice_result(corrections: List[CorrectionInput]) -> CorrectionResult:
         """Correct misclassified line items. Recomputes totals server-side. Call at most once."""  # noqa: E501
@@ -158,6 +165,7 @@ def run_critic(invoice_id: str) -> None:
         tools=[get_tax_categories, correct_invoice_result],
     )
 
+    # get line items as JSON for readability in critic prompt
     line_items_json = json.dumps(to_float(result.get("line_items", [])), indent=2)
     Runner.run_sync(
         critic,

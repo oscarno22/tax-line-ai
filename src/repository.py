@@ -19,6 +19,7 @@ TABLE_NAME = os.environ["TABLE_NAME"]
 dynamodb = boto3.resource("dynamodb")
 
 
+# boto3 requires Decimal for all numeric types
 def _to_decimal(obj):
     if isinstance(obj, float):
         return Decimal(str(obj))
@@ -29,6 +30,7 @@ def _to_decimal(obj):
     return obj
 
 
+# converts Decimal back to float before json serialization
 def to_float(obj):
     if isinstance(obj, Decimal):
         return float(obj)
@@ -39,6 +41,7 @@ def to_float(obj):
     return obj
 
 
+# excluded items are excluded from totals for further review
 def _is_excluded(item: ClassifiedLineItemInput) -> bool:
     return (
         item.tax_category == "unclassified"
@@ -57,9 +60,11 @@ class InvoiceRepository:
         return f"INVOICE#{invoice_id}"
 
     def get_tax_categories(self) -> List[TaxCategory]:
+        # query all items where pk = "TAXCAT"
         resp = self._table.query(KeyConditionExpression=Key("pk").eq("TAXCAT"))
         return [
             TaxCategory(
+                # sk format is "CAT#{id}"
                 id=item["sk"].removeprefix("CAT#"),
                 name=item["name"],
                 rate=item["rate"],
@@ -76,6 +81,7 @@ class InvoiceRepository:
         vendor: str | None,
         now: str,
     ) -> None:
+        # writes METADATA sk — status starts as "pending"
         item = {
             "pk": self._pk(invoice_id),
             "sk": "METADATA",
@@ -98,6 +104,7 @@ class InvoiceRepository:
         ).get("Item")
 
     def get_result(self, invoice_id: str) -> dict:
+        # returns {} if RESULT sk doesn't exist yet (invoice still pending)
         return self._table.get_item(
             Key={"pk": self._pk(invoice_id), "sk": "RESULT"}
         ).get("Item", {})
@@ -119,15 +126,18 @@ class InvoiceRepository:
         pk = self._pk(invoice_id)
         now = datetime.now(timezone.utc).isoformat()
 
+        # annotate line with with excluded flag
         items_with_flag = [
             {**item.model_dump(), "excluded": _is_excluded(item)} for item in line_items
         ]
 
+        # compute tax totals - excluded line items don't contribute
         valid = [item for item in line_items if not _is_excluded(item)]
         subtotal = sum(item.subtotal for item in valid)
         total_tax = sum(item.tax_amount for item in valid)
         total = subtotal + total_tax
 
+        # write RESULT sk
         self._table.put_item(
             Item={
                 "pk": pk,
@@ -139,8 +149,10 @@ class InvoiceRepository:
             }
         )
 
+        # partial if any items were excluded - otherwise complete
         status = "partial" if len(valid) < len(line_items) else "complete"
 
+        # update METADATA sk with new status
         self._table.update_item(
             Key={"pk": pk, "sk": "METADATA"},
             UpdateExpression="SET #s = :s, updated_at = :t",
@@ -155,6 +167,7 @@ class InvoiceRepository:
         invoice_id: str,
         corrections: List[CorrectionInput],
     ) -> CorrectionResult:
+        # if no corrections were needed
         if not corrections:
             meta = self.get_metadata(invoice_id) or {}
             return CorrectionResult(corrected=0, status=meta.get("status", "complete"))
@@ -162,23 +175,29 @@ class InvoiceRepository:
         pk = self._pk(invoice_id)
         now = datetime.now(timezone.utc).isoformat()
 
+        # load current RESULT from dynamo
         result_item = self._table.get_item(Key={"pk": pk, "sk": "RESULT"}).get(
             "Item", {}
         )
         line_items = list(result_item.get("line_items", []))
+        # build lookup to validate critic-supplied category ids
         categories = {cat.id: cat for cat in self.get_tax_categories()}
 
         correction_records = []
         corrected_count = 0
+        # process each correction from critic
         for c in corrections:
             idx = c.line_item_index
+            # correct index is invalid
             if not (0 <= idx < len(line_items)):
                 continue
             cat = categories.get(c.tax_category)
             if not cat:
                 continue
+
             rate = float(cat.rate)
             subtotal = float(line_items[idx].get("subtotal") or 0)
+            # record correction transition for audit trail
             correction_records.append(
                 {
                     "line_item_index": idx,
@@ -189,6 +208,7 @@ class InvoiceRepository:
                     "note": c.note,
                 }
             )
+            # patch the line item — rate and tax_amount recomputed server-side
             line_items[idx] = {
                 **line_items[idx],
                 "tax_category": c.tax_category,
@@ -198,10 +218,12 @@ class InvoiceRepository:
             }
             corrected_count += 1
 
+        # no corrections were (successfully) applied
         if not corrected_count:
             meta = self.get_metadata(invoice_id) or {}
             return CorrectionResult(corrected=0, status=meta.get("status", "complete"))
 
+        # write audit records to dynamo
         self._table.put_item(
             Item={
                 "pk": pk,
@@ -211,10 +233,12 @@ class InvoiceRepository:
             }
         )
 
+        # recompute totals from patched line_items
         valid = [item for item in line_items if not item.get("excluded", False)]
         subtotal = sum(float(item.get("subtotal") or 0) for item in valid)
         total_tax = sum(float(item.get("tax_amount") or 0) for item in valid)
 
+        # overwrite RESULT with corrected line items + new totals
         self._table.put_item(
             Item={
                 "pk": pk,
@@ -226,6 +250,7 @@ class InvoiceRepository:
             }
         )
 
+        # upgrade partial if all line items are now valid
         status = "complete" if len(valid) == len(line_items) else "partial"
         self._table.update_item(
             Key={"pk": pk, "sk": "METADATA"},

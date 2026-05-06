@@ -4,11 +4,13 @@ from repository import repo, to_float
 
 
 def handle(event):
+    # parse invoice_id from path parameter
     invoice_id = (event.get("pathParameters") or {}).get("id")
     if not invoice_id:
         return {"statusCode": 400, "body": json.dumps({"error": "missing invoice id"})}
 
     try:
+        # read current invoice metadata to determine status
         meta = repo.get_metadata(invoice_id)
     except Exception:
         return {
@@ -21,12 +23,14 @@ def handle(event):
 
     status = meta["status"]
 
+    # pending — metadata doesn't exist yet, return early
     if status == "pending":
         return {
             "statusCode": 200,
             "body": json.dumps({"invoice_id": invoice_id, "status": "pending"}),
         }
 
+    # failed — file processing enountered an error
     if status == "failed":
         return {
             "statusCode": 200,
@@ -40,6 +44,7 @@ def handle(event):
         }
 
     try:
+        # retrieve invoice result with classifications + totals
         result = repo.get_result(invoice_id)
     except Exception:
         return {
@@ -47,6 +52,7 @@ def handle(event):
             "body": json.dumps({"error": "failed to read invoice result"}),
         }
 
+    # to_float converts Decimal values from dynamo for serialization
     body = {
         "invoice_id": invoice_id,
         "status": status,
