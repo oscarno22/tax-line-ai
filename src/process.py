@@ -2,7 +2,6 @@ import logging
 import os
 
 import boto3
-from botocore.exceptions import ClientError
 
 import agent
 from repository import repo
@@ -54,18 +53,16 @@ def lambda_handler(event, _):
         try:
             # run agent on file - updates invoice record with results and status
             extracted_vendor = agent.run(invoice_id, file_bytes, content_type)
-            if extracted_vendor:
-                try:
-                    repo.set_vendor_if_missing(invoice_id, extracted_vendor)
-                except ClientError as e:
-                    if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
-                        logger.warning(
-                            "invoice_id=%s failed to set vendor: %s", invoice_id, e
-                        )
         except Exception as exc:
             # set invoice status to "failed" + email result
             _fail(invoice_id, str(exc))
             continue
+
+        if extracted_vendor:
+            try:
+                repo.set_vendor_if_missing(invoice_id, extracted_vendor)
+            except Exception as e:
+                logger.warning("invoice_id=%s failed to set vendor: %s", invoice_id, e)
 
         try:
             # run critic on results - updates invoice record with final status
@@ -131,5 +128,8 @@ def _notify(
 
 def _fail(invoice_id: str, error: str) -> None:
     logger.error("invoice_id=%s failed: %s", invoice_id, error)
-    repo.set_failed(invoice_id, error)
+    try:
+        repo.set_failed(invoice_id, error)
+    except Exception as exc:
+        logger.error("invoice_id=%s could not write failed status: %s", invoice_id, exc)
     _notify(invoice_id, "failed", error=error)
