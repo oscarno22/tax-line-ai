@@ -108,6 +108,15 @@ class InvoiceRepository:
             Key={"pk": self._pk(invoice_id), "sk": "RESULT"}
         ).get("Item", {})
 
+    def set_vendor_if_missing(self, invoice_id: str, vendor: str) -> None:
+        # only writes vendor if the attribute doesn't already exist
+        self._table.update_item(
+            Key={"pk": self._pk(invoice_id), "sk": "METADATA"},
+            UpdateExpression="SET vendor = :v",
+            ConditionExpression="attribute_not_exists(vendor)",
+            ExpressionAttributeValues={":v": vendor},
+        )
+
     def set_failed(self, invoice_id: str, error: str) -> None:
         now = datetime.now(timezone.utc).isoformat()
         self._table.update_item(

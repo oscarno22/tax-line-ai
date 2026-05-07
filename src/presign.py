@@ -31,7 +31,7 @@ def handle(event):
     # vendor name input - optional
     vendor = body.get("vendor", None)
     # content type of uploaded file
-    content_type = body.get("content_type")
+    content_type = body.get("content_type", None)
     if not content_type:
         return {
             "statusCode": 400,

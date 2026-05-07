@@ -8,7 +8,7 @@ import query
 logging.getLogger().setLevel(logging.INFO)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, _):
     # routekey contains HTTP method and path
     route = event.get("routeKey", "")
 

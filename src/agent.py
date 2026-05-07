@@ -21,6 +21,8 @@ from repository import repo, to_float
 logger = logging.getLogger(__name__)
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
+AGENT_MAX_TURNS = 20
+
 _EXTRACT_SYSTEM = """
 Determine whether this document is an invoice or purchase order containing line items.
 Set is_invoice to true only if the document clearly contains purchasable line items with prices.
@@ -110,7 +112,7 @@ def _extract(file_bytes: bytes, content_type: str) -> ExtractedInvoice:
             client.files.delete(file_id)
 
 
-def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
+def run(invoice_id: str, file_bytes: bytes, content_type: str) -> str | None:
     logger.info(
         "invoice_id=%s extraction starting content_type=%s", invoice_id, content_type
     )
@@ -143,10 +145,12 @@ def run(invoice_id: str, file_bytes: bytes, content_type: str) -> None:
 
     # run agent until all line items are classified
     Runner.run_sync(
-        agent,
-        f"Invoice ID: {invoice_id}\n\nExtracted line items:\n{extracted.model_dump_json(indent=2)}",  # noqa: E501
+        starting_agent=agent,
+        input=f"Invoice ID: {invoice_id}\n\nExtracted line items:\n{extracted.model_dump_json(indent=2)}",  # noqa: E501
+        max_turns=AGENT_MAX_TURNS,
     )
     logger.info("invoice_id=%s classifier complete", invoice_id)
+    return extracted.vendor
 
 
 def run_critic(invoice_id: str) -> None:
@@ -174,7 +178,8 @@ def run_critic(invoice_id: str) -> None:
     # get line items as JSON for readability in critic prompt
     line_items_json = json.dumps(to_float(result.get("line_items", [])), indent=2)
     Runner.run_sync(
-        critic,
-        f"Invoice ID: {invoice_id}\n\nClassified line items:\n{line_items_json}",
+        starting_agent=critic,
+        input=f"Invoice ID: {invoice_id}\n\nClassified line items:\n{line_items_json}",
+        max_turns=AGENT_MAX_TURNS,
     )
     logger.info("invoice_id=%s critic complete", invoice_id)

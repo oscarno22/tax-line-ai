@@ -25,6 +25,134 @@ The `web/index.html` is a single static HTML file served from S3 + CloudFront. I
 2. The file is PUT directly to S3 using the presigned URL
 3. The UI polls every 5 seconds and renders the result when processing finishes
 
+## API Layer
+
+### `GET /health`
+
+Returns `{"status": "ok"}`.
+
+### `POST /invoice`
+
+Initiates an invoice submission and returns a presigned S3 URL that the client uses to upload the file directly.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `content_type` | string | yes | Type of the file to upload (`application/pdf`, `image/jpeg`, `image/png`, `text/csv`, `application/json`) |
+| `vendor` | string | no | Vendor name — used in notifications and the result response. If omitted, the agent attempts to extract it from the document and uses that as a fallback. |
+
+**Response `200`:**
+```json
+{
+  "invoice_id": "inv_abc123",
+  "upload_url": "https://s3.amazonaws.com/...",
+  "expires_in": 300
+}
+```
+
+The client must PUT the file to `upload_url` with a `Content-Type` header matching the declared `content_type` - URL expires in 5 minutes.
+
+**Errors:**
+
+| Status | Condition |
+|---|---|
+| `400` | `content_type` missing or request body is not valid JSON |
+| `500` | DynamoDB write failed or presigned URL could not be generated |
+
+### `GET /invoice/{id}`
+
+Polls for the processing result until processing completes.
+
+**Path parameter:** `id` — the `invoice_id` returned by `POST /invoice`.
+
+**Response `200` — pending:**
+```json
+{ "invoice_id": "inv_abc123", "status": "pending" }
+```
+
+**Response `200` — complete:**
+```json
+{
+  "invoice_id": "inv_abc123",
+  "status": "complete",
+  "vendor": "Acme Corp",
+  "line_items": [
+    {
+      "description": "Organic Apples 5kg",
+      "quantity": 10,
+      "unit_price": 12.50,
+      "subtotal": 125.00,
+      "tax_category": "fresh_produce",
+      "tax_rate": 0.0,
+      "tax_amount": 0.0,
+      "excluded": false
+    }
+  ],
+  "subtotal": 125.00,
+  "total_tax": 0.0,
+  "total": 125.00
+}
+```
+
+`vendor` is omitted if none was provided at submission and the agent could not extract one from the document. `line_items`, `subtotal`, `total_tax`, and `total` are omitted when `status` is `pending` or `failed`.
+
+**Response `200` — partial:**
+
+Some items could not be classified or had unreadable numeric fields. Items with `excluded: true` are omitted from the totals. A line item is excluded if `tax_category`, `quantity`, `unit_price`, or `subtotal` could not extracted/calculated correctly.
+
+**Response `200` — failed:**
+```json
+{
+  "invoice_id": "inv_abc123",
+  "status": "failed",
+  "error": "uploaded file does not appear to be an invoice"
+}
+```
+
+Processing failed entirely — no result was saved. The invoice should be resubmitted.
+
+**Errors:**
+
+| Status | Condition |
+|---|---|
+| `404` | Invoice ID not found |
+| `500` | DynamoDB read failed |
+
+### `GET /invoice/{id}/file`
+
+Redirects to the original uploaded file via a freshly-signed presigned S3 URL (valid for 15 minutes). Because the URL is generated on each request, the endpoint link itself never expires.
+
+**Path parameter:** `id` — the `invoice_id` returned by `POST /invoice`.
+
+**Response:** `302 Location: https://s3.amazonaws.com/...`
+
+**Errors:**
+
+| Status | Condition |
+|---|---|
+| `404` | Invoice ID not found |
+| `500` | DynamoDB read failed or presigned URL could not be generated |
+
+### `ProcessLambda`
+
+**Trigger execution flow:**
+
+1. S3 fires an `ObjectCreated` event; the handler extracts `invoice_id` from the key (`uploads/{invoice_id}`)
+2. File bytes are read from S3; `content_type` is read from DynamoDB or S3 record
+3. `agent.run()` runs the three-step agent loop (extract → classify → save result)
+4. `agent.run_critic()` reviews and optionally corrects the saved result
+5. An SNS notification is published with the final status, totals, and a link to the original file
+
+**Error handling tiers:**
+
+| Step | Failure behaviour |
+|---|---|
+| S3 read | Fatal — invoice marked `failed`, notification sent |
+| `agent.run()` | Fatal — invoice marked `failed`, notification sent |
+| `agent.run_critic()` | Non-fatal — warning logged, classifier result kept as-is |
+| SNS notification | Non-fatal — warning logged, result in DynamoDB is unaffected |
+
 ## DynamoDB Schema
 
 Single table: `eranova-technical`. PK/SK design.
