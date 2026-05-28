@@ -12,7 +12,9 @@ Parameters:
 Resources:
   OpenAIApiKeySecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
     Properties:
+      Name: tax-line-ai/openai-api-key
       SecretString: !Sub '{"OPENAI_API_KEY":"${OpenAIApiKey}"}'
 
   LambdaExecutionRole:
