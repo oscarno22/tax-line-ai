@@ -1,5 +1,5 @@
 AWS_REGION      ?= us-east-1
-BOOTSTRAP_STACK := eranova-bootstrap
+BOOTSTRAP_STACK := tax-line-ai-bootstrap
 
 .PHONY: layer bootstrap format lint test-invoice test-retailco test-alpha test-scan
 

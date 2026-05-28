@@ -24,7 +24,7 @@ jobs:
         run: |
           for KEY in DataBucketName WebsiteBucketName; do
             BUCKET=$(aws cloudformation describe-stacks \
-              --stack-name eranova-technical \
+              --stack-name tax-line-ai \
               --query "Stacks[0].Outputs[?OutputKey=='$KEY'].OutputValue" \
               --output text 2>/dev/null || true)
             if [ -n "$BUCKET" ] && [ "$BUCKET" != "None" ]; then
@@ -36,11 +36,11 @@ jobs:
       - name: Force-delete Secrets Manager secret
         run: |
           aws secretsmanager delete-secret \
-            --secret-id eranova/openai-api-key \
+            --secret-id tax-line-ai/openai-api-key \
             --force-delete-without-recovery 2>/dev/null || true
 
       - name: Delete CloudFormation stack
         run: |
-          aws cloudformation delete-stack --stack-name eranova-technical
-          aws cloudformation wait stack-delete-complete --stack-name eranova-technical
+          aws cloudformation delete-stack --stack-name tax-line-ai
+          aws cloudformation wait stack-delete-complete --stack-name tax-line-ai
           echo "Stack deleted."

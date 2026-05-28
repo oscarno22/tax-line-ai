@@ -7,7 +7,7 @@ from pathlib import Path
 
 import boto3
 
-TABLE_NAME = os.environ.get("TABLE_NAME", "eranova-technical")
+TABLE_NAME = os.environ.get("TABLE_NAME", "tax-line-ai")
 CSV_PATH = Path(__file__).parent.parent / "data" / "tax_rate_by_category.csv"
 
 

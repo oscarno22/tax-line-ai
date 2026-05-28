@@ -155,7 +155,7 @@ Redirects to the original uploaded file via a freshly-signed presigned S3 URL (v
 
 ## DynamoDB Schema
 
-Single table: `eranova-technical`. PK/SK design.
+Single table: `tax-line-ai`. PK/SK design.
 
 | PK | SK | Attributes |
 |---|---|---|

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Eranova Technical - Invoice Tax Classification Service
+Description: Tax Line AI - Invoice Tax Classification Service
 
 Parameters:
   OpenAIApiKey:
@@ -13,7 +13,7 @@ Resources:
   OpenAIApiKeySecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: eranova/openai-api-key
+      Name: tax-line-ai/openai-api-key
       SecretString: !Sub '{"OPENAI_API_KEY":"${OpenAIApiKey}"}'
 
   LambdaExecutionRole:
@@ -29,7 +29,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: eranova-technical-access
+        - PolicyName: tax-line-ai-access
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -41,8 +41,8 @@ Resources:
                   - s3:ListBucket
                 Resource:
                   # use Sub to avoid a circular dependency
-                  - !Sub arn:aws:s3:::eranova-technical-${AWS::AccountId}-${AWS::Region}
-                  - !Sub arn:aws:s3:::eranova-technical-${AWS::AccountId}-${AWS::Region}/*
+                  - !Sub arn:aws:s3:::tax-line-ai-${AWS::AccountId}-${AWS::Region}
+                  - !Sub arn:aws:s3:::tax-line-ai-${AWS::AccountId}-${AWS::Region}/*
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -55,7 +55,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - secretsmanager:GetSecretValue
-                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:eranova/openai-api-key*
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:tax-line-ai/openai-api-key*
               - Effect: Allow
                 Action:
                   - sns:Publish
@@ -64,7 +64,7 @@ Resources:
   InvoiceTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: eranova-technical-invoices
+      TopicName: tax-line-ai-invoices
 
   InvoiceTopicEmailSubscription:
     Type: AWS::SNS::Subscription
@@ -76,7 +76,7 @@ Resources:
   DependenciesLayer:
     Type: AWS::Lambda::LayerVersion
     Properties:
-      LayerName: eranova-technical-dependencies
+      LayerName: tax-line-ai-dependencies
       CompatibleRuntimes:
         - python3.12
       Content: layer/
@@ -84,7 +84,7 @@ Resources:
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: eranova-technical
+      FunctionName: tax-line-ai
       Runtime: python3.12
       Handler: handler.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -94,7 +94,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref DataTable
-          BUCKET_NAME: !Sub eranova-technical-${AWS::AccountId}-${AWS::Region}
+          BUCKET_NAME: !Sub tax-line-ai-${AWS::AccountId}-${AWS::Region}
           OPENAI_API_KEY: !Sub '{{resolve:secretsmanager:${OpenAIApiKeySecret}:SecretString:OPENAI_API_KEY}}'
       Layers:
         - !Ref DependenciesLayer
@@ -102,7 +102,7 @@ Resources:
   ProcessLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: eranova-technical-process
+      FunctionName: tax-line-ai-process
       Runtime: python3.12
       Handler: process.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -112,7 +112,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref DataTable
-          BUCKET_NAME: !Sub eranova-technical-${AWS::AccountId}-${AWS::Region}
+          BUCKET_NAME: !Sub tax-line-ai-${AWS::AccountId}-${AWS::Region}
           OPENAI_API_KEY: !Sub '{{resolve:secretsmanager:${OpenAIApiKeySecret}:SecretString:OPENAI_API_KEY}}'
           SNS_TOPIC_ARN: !Ref InvoiceTopic
           API_BASE_URL: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
@@ -125,12 +125,12 @@ Resources:
       FunctionName: !GetAtt ProcessLambda.Arn
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub arn:aws:s3:::eranova-technical-${AWS::AccountId}-${AWS::Region}
+      SourceArn: !Sub arn:aws:s3:::tax-line-ai-${AWS::AccountId}-${AWS::Region}
 
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: eranova-technical
+      Name: tax-line-ai
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
@@ -188,7 +188,7 @@ Resources:
     Type: AWS::S3::Bucket
     DependsOn: LambdaS3Permission
     Properties:
-      BucketName: !Sub eranova-technical-${AWS::AccountId}-${AWS::Region}
+      BucketName: !Sub tax-line-ai-${AWS::AccountId}-${AWS::Region}
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -216,7 +216,7 @@ Resources:
   WebsiteBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub eranova-technical-${AWS::AccountId}-website
+      BucketName: !Sub tax-line-ai-${AWS::AccountId}-website
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -227,7 +227,7 @@ Resources:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: eranova-technical-website-oac
+        Name: tax-line-ai-website-oac
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
@@ -236,7 +236,7 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: eranova-technical website
+        Comment: tax-line-ai website
         DefaultRootObject: index.html
         Enabled: true
         HttpVersion: http2
@@ -270,7 +270,7 @@ Resources:
   DataTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: eranova-technical
+      TableName: tax-line-ai
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: pk

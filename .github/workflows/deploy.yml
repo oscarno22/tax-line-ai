@@ -45,7 +45,7 @@ jobs:
         run: |
           aws cloudformation deploy \
             --template-file packaged-template.yaml \
-            --stack-name eranova-technical \
+            --stack-name tax-line-ai \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
@@ -54,13 +54,13 @@ jobs:
 
       - name: Seed tax categories
         env:
-          TABLE_NAME: eranova-technical
+          TABLE_NAME: tax-line-ai
         run: uv run python scripts/seed_categories.py
 
       - name: Sync website to S3
         run: |
           BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name eranova-technical \
+            --stack-name tax-line-ai \
             --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" \
             --output text)
           aws s3 sync web/ s3://$BUCKET

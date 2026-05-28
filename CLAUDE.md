@@ -23,12 +23,12 @@ Deploy via AWS CloudFormation: package `src/` and `layer/` with SAM, then deploy
 
 Two Lambda functions behind API Gateway HTTP API (v2):
 
-**`eranova-technical` (ApiLambda)** — handles all HTTP routes. `handler.py` dispatches on `routeKey`:
+**`tax-line-ai` (ApiLambda)** — handles all HTTP routes. `handler.py` dispatches on `routeKey`:
 - `POST /invoice` → `presign.py`: validates request, writes `INVOICE#{id}` METADATA record (status `pending`) to DynamoDB, returns presigned S3 PUT URL
 - `GET /invoice/{id}` → `query.py`: reads METADATA + RESULT records, builds response
 - `GET /invoice/{id}/file` → `file.py`: generates a fresh presigned GET URL, returns 302
 
-**`eranova-technical-process` (ProcessLambda)** — triggered by S3 `ObjectCreated` on `uploads/` prefix. `process.py` orchestrates:
+**`tax-line-ai-process` (ProcessLambda)** — triggered by S3 `ObjectCreated` on `uploads/` prefix. `process.py` orchestrates:
 1. Read file bytes from S3
 2. `agent.run()` — three-step agent pipeline (extract → classify → save)
 3. `agent.run_critic()` — reviews and corrects the saved result (non-fatal if it fails)
@@ -39,7 +39,7 @@ Two Lambda functions behind API Gateway HTTP API (v2):
 - **Classify**: OpenAI Agents SDK `Runner.run_sync()` with two tools: `get_tax_categories` (reads DynamoDB) and `save_invoice_result` (closure capturing `invoice_id`, writes RESULT + updates METADATA status).
 - **Critic**: Second agent loop with `get_tax_categories` + `correct_invoice_result` tool. Corrects misclassifications and recovers `unclassified` items. Writes a CORRECTIONS audit record.
 
-**DynamoDB** — single table `eranova-technical`, PK/SK design:
+**DynamoDB** — single table `tax-line-ai`, PK/SK design:
 
 | PK | SK | Purpose |
 |---|---|---|
